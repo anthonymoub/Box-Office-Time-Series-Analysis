@@ -1,0 +1,132 @@
+---
+title: "ARCH/GARCH Modelling"
+output: html_document
+date: "2023-10-06"
+---
+
+```{r}
+library(quantmod)
+getSymbols("NFLX", src = "yahoo")
+
+head(NFLX)
+
+```
+
+```{r}
+nflx_df <- data.frame(Date = index(NFLX), coredata(NFLX))
+
+# Rename the columns for clarity
+names(nflx_df) <- c("Date", "Open", "High", "Low", "Close", "Volume", "Adjusted")
+
+nflx_df <- nflx_df[c('Date' , 'Adjusted')  ] 
+
+head(nflx_df)
+```
+
+```{r}
+
+# Assuming you have a dataframe nflx_df with columns Date and Adjusted
+
+# Ensure the data is sorted by Date
+nflx_df <- nflx_df[order(nflx_df$Date), ]
+
+# Convert the 'Adjusted' prices to a time series object
+# Assuming daily data and starting year is 2007 (modify this according to your data)
+start_year <- as.numeric(format(min(nflx_df$Date), "%Y"))
+start_month <- as.numeric(format(min(nflx_df$Date), "%m"))
+nflx_ts <- ts(nflx_df$Adjusted, start = c(start_year, start_month), frequency = 252)
+
+head(nflx_ts)
+
+```
+
+```{r}
+# Plotting the nflx_ts time series
+plot(nflx_ts, xlab = "Time", ylab = "Adjusted Price", main = "Netflix Stock Prices Over Time", col = "blue", type = "l")
+
+# Adding a grid for better readability
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted")
+
+```
+
+Visually, the series exhibits a clear upward trend, especially noticeable from around 2012 onwards, with significant volatility and a pronounced spike before a substantial drop. This behavior suggests that the time series is non-stationary, as it does not exhibit a constant mean over time. The variance also appears to be changing, with periods of higher volatility, particularly in later years. For ARCH/GARCH modeling, which assumes stationarity, differencing the series or modeling the mean as a function of time might be necessary to stabilize the mean before applying volatility models. 
+
+```{r}
+acf(nflx_ts, main="ACF for NFLX Time Series")
+```
+
+ACF on differenced data
+
+```{r}
+# Plot ACF of the differenced time series
+acf(diff(nflx_ts), main="ACF for Differenced NFLX Time Series")
+
+```
+
+PACF
+```{r}
+pacf(nflx_ts, main="PACF for NFLX Time Series")
+```
+
+```{r}
+library(forecast)
+
+best_arima_model <- auto.arima(nflx_ts)
+
+# Look at the summary of the model
+summary(best_arima_model)
+```
+
+```{r}
+
+residuals_arima <- residuals(best_arima_model)
+# Plot the residuals
+plot(residuals_arima, main="Residuals of ARIMA Model", ylab="Residuals", xlab="Time")
+
+```
+
+
+```{r}
+library(lmtest)
+
+data <- data.frame(residuals=residuals, index=1:length(residuals))
+
+# Fit a linear model - as the Breusch-Pagan test requires a linear model object
+lm_model <- lm(residuals ~ index, data=data)
+
+# Perform the Breusch-Pagan test
+bp_test <- bptest(lm_model)
+
+# Output the result of the Breusch-Pagan test
+print(bp_test)
+```
+
+```{r}
+squared_residuals <- residuals^2
+
+# Use the acf function to compute the ACF of the squared residuals
+par(mar=c(5, 4, 4, 2) + 0.1)
+acf(squared_residuals, main="ACF of Squared Residuals")
+```
+
+```{r}
+library(tseries)
+library(fGarch)
+```
+
+```{r}
+residuals <- na.omit(residuals)  # Remove NA values
+residuals <- residuals[is.finite(residuals)]  # Remove Infinite values
+residuals <- scale(residuals)
+arch.fit <- garchFit(~garch(1,0), data = residuals, trace = F)
+summary(arch.fit)
+```
+
+```{r}
+# Assuming you have successfully fitted the ARCH model and stored it in arch.fit
+# Plot the residuals from the ARCH model
+plot(arch.fit@residuals, main = "Residuals of the GARCH Model", ylab = "Residuals", xlab = "Time")
+
+```
+
+

@@ -1,0 +1,159 @@
+---
+title: "Time_Series_Analysis"
+output: html_document
+date: "2023-10-06"
+---
+
+```{r}
+df <- read.csv("/Users/anthonymoubarak/Desktop/Time_Series/Project/Data/BoxOfficeMojo/box_office_mojo_cleaned.csv")
+head(df)
+```
+
+```{r}
+
+df$top10_gross <- as.numeric(gsub(",", "", gsub("\\$", "", df$top10_gross)))
+df$top10_gross <- na.approx(df$top10_gross)
+convert_to_date <- function(week_string) {
+  year <- substr(week_string, 1, 4)
+  month <- match(substr(week_string, 6, 8), month.abb)
+  week <- as.numeric(substr(week_string, 11, 12))
+  # Assume the first day of each week is a Monday
+  as.Date(paste(year, month, (week - 1) * 7 + 1, sep = "-"))
+}
+df$date <- sapply(df$weekend, convert_to_date)
+library(zoo)
+gdp.ts <- zoo(df$top10_gross, order.by = df$weekend)
+```
+
+```{r}
+library(forecast)
+library(forecast)
+library(ggplot2)
+library(dplyr)
+
+million_format <- function(x) {
+  return(paste0(signif(x/1e6, 2), "M"))
+}
+
+ggplot(data = df_lag, aes(x = value, y = original)) +
+  geom_point(alpha = 0.5, color = "blue") +  # Here's where the color is set
+  facet_wrap(~lag, ncol = 2) + 
+  ggtitle("Lag Plots for Opening Weekend Box Office") + 
+  xlab("Lagged values") + 
+  ylab("Original values") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_x_continuous(labels = million_format) +
+  scale_y_continuous(labels = million_format)
+
+```
+
+```{r}
+library(zoo)
+
+# Check for duplicated indexes
+duplicated_index <- index(gdp.ts)[duplicated(index(gdp.ts))]
+
+# Handle duplicates (e.g., by taking the average)
+if (length(duplicated_index) > 0) {
+  gdp.ts <- aggregate(gdp.ts, by = index(gdp.ts), FUN = mean)
+}
+
+# Decompose and plot
+gdp.ts.clean <- na.omit(gdp.ts)
+decompose_bo <- decompose(ts(gdp.ts.clean, frequency = 12), "multiplicative")   
+
+label_in_millions <- function(x) {
+  return(paste0(round(x / 1e6, 1), "M"))
+}
+
+autoplot(decompose_bo) + 
+  scale_y_continuous(labels = label_in_millions) +
+  theme_minimal() +
+  theme(
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5)  # This line ensures the title is centered
+  )
+
+```
+
+```{r}
+
+# Define a custom label function for displaying in millions
+label_in_millions <- function(x) {
+  return(paste0(round(x / 1e6, 1), "M"))
+}
+
+df_2020 <- df[df$year == 2020, ]
+df_2020$top10_gross <- na.approx(df_2020$top10_gross)
+ts_2020 <- ts(df_2020$top10_gross, frequency = 12)  # Adjust frequency based on data granularity
+decomposed_2020 <- decompose(ts_2020, type = "multiplicative")
+
+autoplot(decomposed_2020) + 
+  scale_y_continuous(labels = label_in_millions) +
+  theme_minimal() +
+  theme(
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5)  # Centering the title
+  )
+
+ 
+
+```
+
+# Moving Average Analsysis
+```{r}
+ma_df <- df[, c('weekend' , 'top10_gross')]
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Define a custom label function for displaying in millions
+label_in_millions <- function(x) {
+  return(paste0(round(x / 1e6, 1), "M"))
+}
+
+ggplot(ma_df_long, aes(x = date, y = value, color = ma_type)) + 
+  geom_line(aes(y = actual, color = "Actual")) +
+  geom_line() + 
+  facet_wrap(~ ma_type, scales = "free_y", ncol = 2) +
+  labs(title = "Time Series with Various Moving Averages",
+       y = "Top 10 Gross", color = "Series") +
+  scale_color_manual(values = c("Actual" = "black", "ma_12" = "red", "ma_24" = "blue", "ma_36" = "green", "ma_52" = "purple")) +
+  scale_y_continuous(labels = label_in_millions) +  # Adjust y-axis to "M" format
+  theme_minimal() +
+  theme(
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5),
+    strip.text = element_text(size = 0)
+  )
+
+
+```
+
+# ACF and PACF
+
+```{r}
+acf <- ma_df[, c("top10_gross")]
+ggAcf(acf,52)+ggtitle("Weekend Box Office ACF") + theme(
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+```{r}
+pacf(acf, 52, main="Weekend Box Office PACF") + theme(
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+```{r}
+library(tseries)
+adf_result <- adf.test(acf)
+print(adf_result)
+```
+
+```{r}
+
+```
